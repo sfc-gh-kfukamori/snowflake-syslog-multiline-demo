@@ -148,6 +148,9 @@ FROM grouped
 WHERE record_group_id > 0
 GROUP BY source_file, record_group_id;
 
+--結合データの確認
+SELECT * FROM silver_syslog;
+
 -- 結合結果確認
 SELECT
   record_group_id,
