@@ -21,10 +21,9 @@
     Gold層 (パース済み構造化ビュー)
 
   実行方法:
-    1. sample_syslog.log を用意（同梱）
-    2. 本SQLスクリプトを上から順に実行
-    3. PUT コマンドは SnowSQL / snowflake CLI で実行する
-       (Snowsight の Worksheet からは PUT 不可)
+    1. 本SQLスクリプトを Snowsight Worksheet で上から順に実行
+       (PUTは不要。INSERT方式でサンプルデータを投入します)
+    2. SnowSQLを使う場合は Step 3B のPUT方式も利用可能
 
   所要時間: 約5分
 ================================================================================
@@ -62,25 +61,17 @@ CREATE OR REPLACE STAGE syslog_stage
   FILE_FORMAT = syslog_raw_fmt;
 
 -- ============================================================================
--- Step 3: サンプルデータのアップロード
+-- Step 3: サンプルデータの投入
 -- ============================================================================
--- ※ 以下のPUTコマンドは SnowSQL または snowflake CLI で実行してください
--- ※ Snowsight Worksheet からは PUT は実行できません
--- ※ ファイルパスは環境に合わせて変更してください
-
-PUT file:///Users/kfukamori/CoCoDesktop/syslog_multiline_demo/sample_syslog.log
-  @syslog_stage
-  AUTO_COMPRESS=FALSE
-  OVERWRITE=TRUE;
-
--- アップロード確認
-LIST @syslog_stage;
+-- 方法A: Snowsight / 任意のSQL環境で実行可能（INSERT方式）
+-- 方法B: SnowSQL / snowflake CLI を使う場合はPUT + COPY INTO方式
+--
+-- ここでは方法A（Snowsightでも動作）を使用します。
+-- 方法BはStep 3B（後述）を参照してください。
 
 -- ============================================================================
--- Step 4: Bronze層テーブル作成 & COPY INTO
+-- Step 3A: INSERT方式（Snowsightでも実行可能）
 -- ============================================================================
--- Bronze層: 1行=1レコードでそのまま格納
--- METADATA$FILE_ROW_NUMBER で行順を保持（マルチライン結合に必須）
 
 CREATE OR REPLACE TABLE bronze_syslog (
   raw_line         VARCHAR,
@@ -89,15 +80,42 @@ CREATE OR REPLACE TABLE bronze_syslog (
   load_ts          TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
 
-COPY INTO bronze_syslog (raw_line, source_file, file_row_number)
-  FROM (
-    SELECT $1, METADATA$FILENAME, METADATA$FILE_ROW_NUMBER
-    FROM @syslog_stage
-  )
-  FILE_FORMAT = syslog_raw_fmt
-  FORCE = TRUE;
+INSERT INTO bronze_syslog (raw_line, source_file, file_row_number) VALUES
+-- レコード1: ゾーンファイルロードエラー（マルチライン: 4行）
+('<30>Jun 24 03:12:08 dns-server01 named[2481]: zone example.jp/IN: loading from master file db.example.jp failed', 'sample_syslog.log', 1),
+('dns_zone_load: example.jp/IN: db.example.jp:42: example.jp: NS ''ns1.example.jp'' has no address records (A or AAAA)', 'sample_syslog.log', 2),
+('dns_zone_load: example.jp/IN: db.example.jp:58: example.jp: MX ''mail.example.jp'' has no address records (A or AAAA)', 'sample_syslog.log', 3),
+('dns_zone_load: example.jp/IN: zone example.jp/IN: not loaded due to errors', 'sample_syslog.log', 4),
+-- レコード2: DNSクエリ通常ログ（シングルライン: 1行）
+('<30>Jun 24 03:12:10 dns-server01 named[2481]: client @0x7f3a1c002e10 192.0.2.15#53421 (www.example.jp): query: www.example.jp IN A +E(0)K (192.0.2.1)', 'sample_syslog.log', 5),
+-- レコード3: ゾーン転送失敗（マルチライン: 4行）
+('<30>Jun 24 03:15:22 dns-server01 named[2481]: zone internal.example.jp/IN: refresh: retry limit for master 10.0.0.1#53 exceeded', 'sample_syslog.log', 6),
+('transfer of ''internal.example.jp/IN'' from 10.0.0.1#53: failed while receiving responses: REFUSED', 'sample_syslog.log', 7),
+('transfer of ''internal.example.jp/IN'' from 10.0.0.1#53: Transfer status: REFUSED', 'sample_syslog.log', 8),
+('zone internal.example.jp/IN: unable to load from master, will retry', 'sample_syslog.log', 9),
+-- レコード4: MXクエリ通常ログ（シングルライン: 1行）
+('<30>Jun 24 03:15:25 dns-server01 named[2481]: client @0x7f3a1c005a20 192.0.2.20#44821 (mail.example.jp): query: mail.example.jp IN MX +E(0)K (192.0.2.1)', 'sample_syslog.log', 10);
 
--- 取り込み確認: 全行が個別レコードとして入っていることを確認
+-- ============================================================================
+-- Step 3B: PUT + COPY INTO方式（SnowSQL / snowflake CLI 用）
+-- ============================================================================
+-- Snowsightでは実行できません。SnowSQLを使う場合は以下をコメント解除して実行:
+--
+-- PUT file:///path/to/sample_syslog.log @syslog_stage AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+-- LIST @syslog_stage;
+--
+-- COPY INTO bronze_syslog (raw_line, source_file, file_row_number)
+--   FROM (
+--     SELECT $1, METADATA$FILENAME, METADATA$FILE_ROW_NUMBER
+--     FROM @syslog_stage
+--   )
+--   FILE_FORMAT = syslog_raw_fmt
+--   FORCE = TRUE;
+
+-- ============================================================================
+-- Step 4: Bronze層 取り込み確認
+-- ============================================================================
+-- 全行が個別レコードとして入っていることを確認（10行 = 4レコード分）
 SELECT file_row_number, LEFT(raw_line, 100) AS line_preview
 FROM bronze_syslog
 ORDER BY file_row_number;
