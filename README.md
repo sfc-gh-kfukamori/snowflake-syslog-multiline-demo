@@ -3,7 +3,7 @@
 ## 概要
 
 syslog形式で、ペイロード部分に改行コードを含むマルチラインログを、
-COPY INTOでSnowflakeに取り込み、SQL内で1レコードに結合する方法のデモです。
+Snowflakeの `COPY INTO` で取り込み、SQL内で1レコードに結合する方法のデモです。
 
 ## 前提条件
 
@@ -31,33 +31,32 @@ Silver層 (1レコード=1イベント)
 Gold層 (パース済み構造化ビュー)
 ```
 
-## 実行手順
+## 実行手順（Snowsight）
 
-### 1. SnowSQL / Snowflake CLI で接続
+### 1. Snowsight で Worksheet を開く
 
-```bash
-snowsql -a <account> -u <user>
-```
+新規 SQL Worksheet を作成します。
 
-### 2. SQLスクリプトを実行
+### 2. Step 0〜2 を実行
 
-```bash
-snowsql -a <account> -u <user> -f demo_syslog_multiline.sql
-```
+`demo_syslog_multiline.sql` の Step 0〜2 を Worksheet に貼り付けて実行します。
+データベース、スキーマ、ファイルフォーマット、内部ステージが作成されます。
 
-または、SnowSQL内で:
+### 3. サンプルデータをステージにアップロード
 
-```sql
-!source demo_syslog_multiline.sql
-```
+1. 左ペイン → **Data** → **Databases** → `SYSLOG_DEMO` → `RAW` → **Stages** → `SYSLOG_STAGE`
+2. 右上の **「+ Files」** ボタンをクリック
+3. `sample_syslog.log` を選択してアップロード
 
-**注意**: `PUT` コマンドは Snowsight Worksheet では実行できません。
-SnowSQL または snowflake CLI を使用してください。
+### 4. Step 4 以降を順に実行
 
-### 3. Snowsight で結果を確認する場合
+Worksheet に戻り、Step 4 以降を順に実行していきます。
 
-PUT以降のステップ（Step 4〜）は Snowsight Worksheet からでも実行可能です。
-事前に SnowSQL で PUT だけ実行しておけば、残りは Snowsight で確認できます。
+- **Step 4**: `COPY INTO` でBronze層に取り込み
+- **Step 5**: Silver層（マルチライン結合）
+- **Step 6**: Gold層（構造化ビュー）
+- **Step 7**: 検証（期待値との比較）
+- **Step 8**: 大規模負荷テスト（オプション、1000万行）
 
 ## サンプルデータの説明
 
@@ -70,7 +69,7 @@ PUT以降のステップ（Step 4〜）は Snowsight Worksheet からでも実�
 | 3 | ゾーン転送失敗 | 4行 | マルチライン（転送エラー詳細） |
 | 4 | MXクエリ通常ログ | 1行 | シングルライン |
 
-合計10物理行 → 正しく処理されると4論理レコードになります。
+合計10物理行 → 正しく処理されると **4論理レコード** になります。
 
 ## 技術的なポイント
 
