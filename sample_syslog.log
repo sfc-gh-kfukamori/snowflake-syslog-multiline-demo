@@ -1,0 +1,10 @@
+<30>Jun 24 03:12:08 dns-server01 named[2481]: zone example.jp/IN: loading from master file db.example.jp failed
+dns_zone_load: example.jp/IN: db.example.jp:42: example.jp: NS 'ns1.example.jp' has no address records (A or AAAA)
+dns_zone_load: example.jp/IN: db.example.jp:58: example.jp: MX 'mail.example.jp' has no address records (A or AAAA)
+dns_zone_load: example.jp/IN: zone example.jp/IN: not loaded due to errors
+<30>Jun 24 03:12:10 dns-server01 named[2481]: client @0x7f3a1c002e10 192.0.2.15#53421 (www.example.jp): query: www.example.jp IN A +E(0)K (192.0.2.1)
+<30>Jun 24 03:15:22 dns-server01 named[2481]: zone internal.example.jp/IN: refresh: retry limit for master 10.0.0.1#53 exceeded
+transfer of 'internal.example.jp/IN' from 10.0.0.1#53: failed while receiving responses: REFUSED
+transfer of 'internal.example.jp/IN' from 10.0.0.1#53: Transfer status: REFUSED
+zone internal.example.jp/IN: unable to load from master, will retry
+<30>Jun 24 03:15:25 dns-server01 named[2481]: client @0x7f3a1c005a20 192.0.2.20#44821 (mail.example.jp): query: mail.example.jp IN MX +E(0)K (192.0.2.1)
